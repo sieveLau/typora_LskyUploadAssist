@@ -1,0 +1,4 @@
+{
+    "token": "sometoken",
+    "url": "https://yoursite.com/api/v1/upload"
+}
