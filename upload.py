@@ -2,54 +2,57 @@ import inspect
 import os
 import requests
 import json
-import hashlib
 from pathlib import Path
 import sys
 
-def get_hash_memory_optimized(f_path, mode='md5'):
-    h = hashlib.new(mode)
-    with open(f_path, 'rb') as file:
-        block = file.read(512)
-        while block:
-            h.update(block)
-            block = file.read(512)
-
-    return h.hexdigest()
-
+# to detect where am I, in order to find config file
 filename = inspect.getframeinfo(inspect.currentframe()).filename
 path = os.path.dirname(os.path.abspath(filename))
 configFilePath = path+'/config.json'
 
 if __name__ == "__main__":
+    url = ""
+    headers = {}
+    configfd = None
+    try:
+        configfd = open(configFilePath)
+        config = json.load(configfd)
 
-    configfd = open(configFilePath)
-    config = json.load(configfd)
+        url = config['url']
 
-    url = config['url']
-
-    headers = {
-        "Authorization": "Bearer "+config['token'],"Accept":"application/json",
-        #"Content-Type":"multipart/form-data"
-    }
-
-    configfd.close()
-
-    result = []
-    for i in range(1,len(sys.argv)):
-
-        Pfile = Path(sys.argv[i])
-
-        hashf = get_hash_memory_optimized(sys.argv[i])
-
-        data = {
-        "file" :(Pfile.name,open(Pfile,'rb'),'image/png')
+        # Lsky Pro's V2 api
+        # But don't set Content-Type, it sucks
+        headers = {
+            "Authorization": "Bearer "+config['token'],"Accept":"application/json",
+            #"Content-Type":"multipart/form-data"
         }
 
-        r = requests.post(url,headers=headers,files=data)
+        # for Typora, it passes photo file names as args to this program
+        # and then reads urls one per line back
+        result = []
+        for i in range(1,len(sys.argv)):
+            
+            # P(hoto)file
+            Pfile = Path(sys.argv[i])
 
-        rsp = r.json()
+            # same as curl --form "file=@file_path"
+            data = {
+            "file" :(Pfile.name,open(Pfile,'rb'),'image/png')
+            }
 
-        if rsp['status'] == True:
-            result.append(rsp['data']['links']['url'])
+            # here we make the request
+            r = requests.post(url,headers=headers,files=data)
 
-    print(*result, sep = "\n")
+            # get response body and parse as json
+            rsp = r.json()
+
+            # if status is True, extract the url and push into the result array, waiting for the final output
+            if rsp['status'] == True:
+                result.append(rsp['data']['links']['url'])
+        
+        # print one per line to satisfy Typora
+        print(*result, sep = "\n")
+    except:
+        exit(-1)
+    finally:
+        configfd.close()
